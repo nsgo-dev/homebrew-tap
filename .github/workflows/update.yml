@@ -1,0 +1,128 @@
+# Keeps Formula/nsgo.rb on the latest nsgo release: it reads the release, refuses one whose checksums.txt or assets lack a darwin or linux archive, regenerates the formula with script/generate-formula.rb, audits, installs and tests it, and commits only when the formula changed. It needs no token from nsgo: the release is public and the commit uses this repository's GITHUB_TOKEN.
+name: update
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The nsgo release tag to write, such as v0.3.4 (default the latest release)
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+jobs:
+  update:
+    # The commit goes to main, so a run started on another branch would publish that branch's scripts.
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Set up Homebrew
+        id: brew
+        uses: Homebrew/actions/setup-homebrew@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # 2026.11.14.1
+        with:
+          token: ${{ github.token }}
+
+      - name: Find the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          if [[ -n "${REQUESTED}" ]]
+          then
+            release=$(gh api "repos/nsgo-dev/nsgo/releases/tags/${REQUESTED}")
+          else
+            release=$(gh api repos/nsgo-dev/nsgo/releases/latest)
+          fi
+          tag=$(jq -r .tag_name <<<"${release}")
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          then
+            echo "::error::release ${tag} is not of the form vX.Y.Z"
+            exit 1
+          fi
+          version=${tag#v}
+          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+
+          current=""
+          if [[ -f Formula/nsgo.rb ]]
+          then
+            current=$(sed -n 's|.*/releases/download/\(v[^/]*\)/.*|\1|p' Formula/nsgo.rb | sort -u)
+          fi
+          if [[ "${current}" == "${tag}" ]]
+          then
+            echo "::notice::Formula/nsgo.rb already installs ${tag}"
+            echo "skip=true" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          assets=$(jq -r '.assets[].name' <<<"${release}")
+          if ! grep -qx checksums.txt <<<"${assets}"
+          then
+            # Releases before v0.3.4 carry no binaries; a scheduled run waits for one that does.
+            if [[ -n "${REQUESTED}" ]]
+            then
+              echo "::error::release ${tag} has no checksums.txt"
+              exit 1
+            fi
+            echo "::notice::release ${tag} has no checksums.txt, so no binaries for the formula yet"
+            echo "skip=true" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          missing=""
+          for platform in darwin_arm64 darwin_amd64 linux_amd64 linux_arm64
+          do
+            archive="nsgo_${version}_${platform}.tar.gz"
+            grep -qxF "${archive}" <<<"${assets}" || missing="${missing} ${archive}"
+          done
+          if [[ -n "${missing}" ]]
+          then
+            echo "::error::release ${tag} lacks${missing}"
+            exit 1
+          fi
+          echo "skip=false" >>"${GITHUB_OUTPUT}"
+
+      - name: Write the formula
+        if: steps.release.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: script/generate-formula.rb "${TAG}"
+
+      - name: Audit, install and test the formula
+        if: steps.release.outputs.skip == 'false'
+        env:
+          FORMULA: ${{ steps.brew.outputs.tap-name }}/nsgo
+        run: |
+          brew style --formula "${FORMULA}"
+          brew audit --strict --formula "${FORMULA}"
+          brew install --formula "${FORMULA}"
+          brew test "${FORMULA}"
+
+      - name: Commit the formula
+        if: steps.release.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if [[ -z "$(git status --porcelain -- Formula)" ]]
+          then
+            echo "::notice::Formula/nsgo.rb is unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/nsgo.rb
+          git commit -m "nsgo ${TAG#v}"
+          git push origin HEAD:main
