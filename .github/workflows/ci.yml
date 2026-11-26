@@ -1,0 +1,71 @@
+# Checks the tap on macOS and Linux: brew style over the formula and scripts, the generator's tests against fake releases, a fake release's formula audited, installed and tested, and the committed Formula/nsgo.rb, once update.yml has written it, audited, installed and tested too.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Homebrew
+        id: brew
+        uses: Homebrew/actions/setup-homebrew@ceec4e8419bb3c97ce96e9dda7738499ed5f869d # 2026.11.14.1
+
+      - name: Style
+        env:
+          TAP: ${{ steps.brew.outputs.tap-name }}
+        run: brew style "${TAP}"
+
+      - name: Audit, install and test the committed formula
+        if: hashFiles('Formula/nsgo.rb') != ''
+        env:
+          FORMULA: ${{ steps.brew.outputs.tap-name }}/nsgo
+        run: |
+          brew audit --strict --formula "${FORMULA}"
+          brew install --formula "${FORMULA}"
+          brew test "${FORMULA}"
+          nsgo version
+          brew uninstall --formula "${FORMULA}"
+
+      - name: Test the generator
+        run: script/test-generator.sh "${RUNNER_TEMP}/fake/nsgo.rb"
+
+      - name: Audit, install and test a fake release's formula
+        env:
+          FORMULA: ${{ steps.brew.outputs.tap-name }}/nsgo
+        run: |
+          # The formula is replaced in this checkout only, so brew loads it by its tap name.
+          mkdir -p Formula
+          cp "${RUNNER_TEMP}/fake/nsgo.rb" Formula/nsgo.rb
+          brew style --formula "${FORMULA}"
+          brew audit --strict --formula "${FORMULA}"
+          brew install --formula "${FORMULA}"
+          brew test "${FORMULA}"
+          output=$(nsgo version)
+          if [[ "${output}" != "nsgo v0.0.1" ]]
+          then
+            echo "::error::nsgo version printed '${output}', not nsgo v0.0.1"
+            exit 1
+          fi
+          brew uninstall --formula "${FORMULA}"
