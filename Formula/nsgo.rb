@@ -11,25 +11,25 @@ class Nsgo < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.3.4/nsgo_0.3.4_darwin_arm64.tar.gz"
-      sha256 "9adc3bf82b10e28d383e642f7a256507b01f7d753d2aac5a43d2468c79f94026"
+      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.4.0/nsgo_0.4.0_darwin_arm64.tar.gz"
+      sha256 "59a2271830692201f16dd5bcbc6e955a68e6238793c50c8e4a6c700f366d85f9"
     end
 
     on_intel do
-      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.3.4/nsgo_0.3.4_darwin_amd64.tar.gz"
-      sha256 "367a51847a678db73f2acddf987b7aeb189206520ddb12cc50bf3b18dd574f56"
+      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.4.0/nsgo_0.4.0_darwin_amd64.tar.gz"
+      sha256 "af173e49f534f140f6f278ed383799a85e155e8032774e555f152a02925f7666"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.3.4/nsgo_0.3.4_linux_arm64.tar.gz"
-      sha256 "64cfa125d01a23aa941e554a12c588daba592994999753cb4422cddf5a0b5b21"
+      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.4.0/nsgo_0.4.0_linux_arm64.tar.gz"
+      sha256 "0a4a25635c7d748d56e2009dda1ae882cdcdd5f0015183f7e003505e3eb6f176"
     end
 
     on_intel do
-      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.3.4/nsgo_0.3.4_linux_amd64.tar.gz"
-      sha256 "44bbc4c8e3b6dbd3159a746b401ede3351ce49dcef7eac7c90aca7e7f43d230c"
+      url "https://github.com/nsgo-dev/nsgo/releases/download/v0.4.0/nsgo_0.4.0_linux_amd64.tar.gz"
+      sha256 "0ed88c6e5677d5d0e91ef61e2f3a50ccf355a96dc97a3963aac5ba8defa84932"
     end
   end
 
